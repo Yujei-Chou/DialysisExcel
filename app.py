@@ -1,7 +1,7 @@
 import sys, datetime
 from preprocess import CAPDExcel
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QDateEdit, QVBoxLayout, QHBoxLayout, QSizePolicy, QFileDialog, QMessageBox
-from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtCore import QDate
 
 
 class DialogApp(QWidget):

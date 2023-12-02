@@ -115,6 +115,7 @@ class CAPDExcel():
         self.workSheet.write(f'{chr(ord(c)+1)}{r}', input, self.detail_based_format)
         self.workSheet.write(f'{chr(ord(c)+1)}{r+1}', output, self.detail_UF_format)
         self.workSheet.set_column(f'{c}:{c}', 3)
+        self.workSheet.set_column(f'{chr(ord(c)+1)}:{chr(ord(c)+1)}', 7.88)
 
 
     def getDataframe(self):
@@ -170,6 +171,7 @@ class CAPDExcel():
         self.workSheet.merge_range('K3:L3', '4', self.colname_format)
         self.workSheet.merge_range('M3:N3', '5', self.colname_format)
         self.workSheet.merge_range('O2:O3', '全日脫水量', self.colname_format)
+        self.workSheet.set_column('O:O', 9.5)
 
         sidx = 4
         CAPD_df = self.getDataframe()
@@ -185,10 +187,12 @@ class CAPDExcel():
             self.intervalSet(None, None, None, sidx, 'M')
 
             self.workSheet.merge_range(f'O{sidx}:O{sidx+1}', f'=F{sidx+1}+H{sidx+1}+J{sidx+1}+L{sidx+1}-8000', self.detail_based_format)
+            self.workSheet.set_row(sidx, 12)
+            self.workSheet.set_row(sidx+1, 12)
 
             sidx += 2
 
-
+        self.workSheet.print_area(f'B1:O{sidx-1}')
         self.workBook.close()
         
 
