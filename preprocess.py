@@ -1,17 +1,6 @@
 import pandas as pd
 import numpy as np
 
-def timePeriodTrans(hr):
-    if(5 <= hr and hr <= 7):
-        return 1
-    elif(10 <= hr and hr <= 13):
-        return 2
-    elif(16 <= hr and hr <= 19):
-        return 3
-    elif(21 <= hr and hr <=23):
-        return 4
-    else:
-        pass
 
 def getBPcomb(BP_df, all_df):
     minIdx = BP_df['收縮壓 (mmHg)'].idxmin()
@@ -23,47 +12,8 @@ def getBPcomb(BP_df, all_df):
     return BPcomb
 
 
-def getDataframe(file, start_date, end_date):
-    org_df = pd.read_excel(file, engine='openpyxl')
-    org_df['日期'] = org_df['時間戳記'].dt.date
-    org_df['時段'] = org_df['時間戳記'].dt.hour.apply(timePeriodTrans)
-    org_df['脫水量 (cc)'] = org_df['脫水量 (cc)'].shift(-1)
-    org_df = org_df[(org_df['日期'] >= start_date) & (org_df['日期'] < end_date)]
-    org_df = org_df.drop(columns=['時間戳記'])
-
-    pad_df = pd.DataFrame({'時間戳記': pd.date_range(start=start_date, end=end_date, freq='6H')})[:-1]
-    pad_df['日期'] = pad_df['時間戳記'].dt.date
-    pad_df['時段'] = pad_df['時間戳記'].dt.hour // 6 + 1
-    pad_df = pad_df.drop(columns=['時間戳記'])
-
-    df = pd.merge(org_df, pad_df, on=['日期' , '時段'], how='outer').sort_values(by=['日期', '時段']).reset_index(drop=True)
-
-    weight_min = df[['日期', '體重 (kg)']].groupby('日期').min().reset_index()
-
-    BP_onSBPmin = df[['日期', '收縮壓 (mmHg)', '舒張壓 (mmHg)']].groupby('日期').apply(getBPcomb, all_df=df).rename('血壓 (mm/Hg)').reset_index()
-
-    DP_list = df[['日期', '透析液濃度 (%)']].groupby('日期')['透析液濃度 (%)'].apply(list).reset_index()
-    DP_list[['早上(濃度)', '中午(濃度)', '下午(濃度)', '晚上(濃度)']] = pd.DataFrame(DP_list['透析液濃度 (%)'].tolist())
-    DP_list = DP_list.drop(columns=['透析液濃度 (%)'])
-
-    UF_list = df[['日期', '脫水量 (cc)']].groupby('日期')['脫水量 (cc)'].apply(list).reset_index()
-    UF_list[['早上(排出)', '中午(排出)', '下午(排出)', '晚上(排出)']] = pd.DataFrame(UF_list['脫水量 (cc)'].tolist())
-    UF_list = UF_list.drop(columns=['脫水量 (cc)'])
-
-
-    merge_dfs = [BP_onSBPmin, weight_min, UF_list, DP_list]
-    CAPD = merge_dfs[0]
-    for merge_df in merge_dfs[1:]:
-        CAPD = pd.merge(CAPD, merge_df, on='日期')
-    CAPD = CAPD.replace({np.nan: None})
-
-    return CAPD
-
-
-
 class CAPDExcel():
     def __init__(self, uploadfile, downloadfile, start_date, end_date) -> None:
-        super().__init__()
         self.uploadfile = uploadfile
         self.downloadfile = downloadfile
         self.start_date = start_date
@@ -110,43 +60,46 @@ class CAPDExcel():
         self.colname_format = self.workBook.add_format(colname_dict)
 
     
-    def intervalSet(self, DP, input, output, r, c): # (透析液濃度, 注入量, 排出量, rowId, colId)
-        self.workSheet.merge_range(f'{c}{r}:{c}{r+1}', DP, self.detail_DP_format)
-        self.workSheet.write(f'{chr(ord(c)+1)}{r}', input, self.detail_based_format)
-        self.workSheet.write(f'{chr(ord(c)+1)}{r+1}', output, self.detail_UF_format)
+    def intervalSet(self, dfRow, tp, r, c): # (dfRow, timePeriod, rowId, colId)
+        self.workSheet.merge_range(f'{c}{r}:{c}{r+1}', dfRow[f'{tp}(濃度)'], self.detail_DP_format)
+        self.workSheet.write(f'{chr(ord(c)+1)}{r}', 2000 if dfRow[f'{tp}(排出)'] else None, self.detail_based_format)
+        self.workSheet.write(f'{chr(ord(c)+1)}{r+1}', dfRow[f'{tp}(排出)'], self.detail_UF_format)
+        if(dfRow['時段頻率'] < 0.15 and dfRow[f'{tp}(排出)']):
+            self.workSheet.write_comment(f'{chr(ord(c)+1)}{r}', '透析時間: ' + dfRow[f'{tp}(時段)'].strftime("%m-%d %H:%M"))
         self.workSheet.set_column(f'{c}:{c}', 3)
         self.workSheet.set_column(f'{chr(ord(c)+1)}:{chr(ord(c)+1)}', 7.88)
 
 
     def getDataframe(self):
-        org_df = pd.read_excel(self.uploadfile, engine='openpyxl')
-        org_df['日期'] = org_df['時間戳記'].dt.date
-        org_df['時段'] = org_df['時間戳記'].dt.hour.apply(timePeriodTrans)
-        org_df['脫水量 (cc)'] = org_df['脫水量 (cc)'].shift(-1)
-        org_df = org_df[(org_df['日期'] >= self.start_date) & (org_df['日期'] < self.end_date)]
-        org_df = org_df.drop(columns=['時間戳記'])
-
-        pad_df = pd.DataFrame({'時間戳記': pd.date_range(start=self.start_date, end=self.end_date, freq='6H')})[:-1]
-        pad_df['日期'] = pad_df['時間戳記'].dt.date
-        pad_df['時段'] = pad_df['時間戳記'].dt.hour // 6 + 1
-        pad_df = pad_df.drop(columns=['時間戳記'])
-
-        df = pd.merge(org_df, pad_df, on=['日期' , '時段'], how='outer').sort_values(by=['日期', '時段']).reset_index(drop=True)
+        df = pd.read_excel(self.uploadfile, engine='openpyxl').sort_values(by=['時間戳記'])
+        df = df[df['時間戳記'].diff() > pd.Timedelta(hours=1)]
+        df['日期'] = df['時間戳記'].dt.date
+        df['時段'] = df.groupby('日期').cumcount() + 1
+        df['脫水量 (cc)'] = df['脫水量 (cc)'].shift(-1)
+        df = df[(df['日期'] >= self.start_date) & (df['日期'] < self.end_date)]
+        df = df.reset_index(drop=True)
 
         weight_min = df[['日期', '體重 (kg)']].groupby('日期').min().reset_index()
 
         BP_onSBPmin = df[['日期', '收縮壓 (mmHg)', '舒張壓 (mmHg)']].groupby('日期').apply(getBPcomb, all_df=df).rename('血壓 (mm/Hg)').reset_index()
 
-        DP_list = df[['日期', '透析液濃度 (%)']].groupby('日期')['透析液濃度 (%)'].apply(list).reset_index()
-        DP_list[['早上(濃度)', '中午(濃度)', '下午(濃度)', '晚上(濃度)']] = pd.DataFrame(DP_list['透析液濃度 (%)'].tolist())
+        time_max = df[['日期', '時段']].groupby('日期').max().reset_index()
+        time_freq = (time_max['時段'].value_counts()/len(time_max)).sort_index().to_dict()
+        time_max_freq = time_max.replace(time_freq).rename(columns={'時段': '時段頻率'})
+
+        DP_list = df[['日期', '透析液濃度 (%)']].groupby('日期')['透析液濃度 (%)'].agg(lambda x: list(x) + [np.nan] * (5-len(x))).reset_index()
+        DP_list[['1(濃度)', '2(濃度)', '3(濃度)', '4(濃度)', '5(濃度)']] = pd.DataFrame(DP_list['透析液濃度 (%)'].tolist())
         DP_list = DP_list.drop(columns=['透析液濃度 (%)'])
 
-        UF_list = df[['日期', '脫水量 (cc)']].groupby('日期')['脫水量 (cc)'].apply(list).reset_index()
-        UF_list[['早上(排出)', '中午(排出)', '下午(排出)', '晚上(排出)']] = pd.DataFrame(UF_list['脫水量 (cc)'].tolist())
+        UF_list = df[['日期', '脫水量 (cc)']].groupby('日期')['脫水量 (cc)'].agg(lambda x: list(x) + [np.nan] * (5-len(x))).reset_index()
+        UF_list[['1(排出)', '2(排出)', '3(排出)', '4(排出)', '5(排出)']] = pd.DataFrame(UF_list['脫水量 (cc)'].tolist())
         UF_list = UF_list.drop(columns=['脫水量 (cc)'])
 
+        time_list = df[['日期', '時間戳記']].groupby('日期')['時間戳記'].agg(lambda x: list(x) + [np.nan] * (5-len(x))).reset_index()
+        time_list[['1(時段)', '2(時段)', '3(時段)', '4(時段)', '5(時段)']] = pd.DataFrame(time_list['時間戳記'].tolist())
+        time_list = time_list.drop(columns=['時間戳記'])
 
-        merge_dfs = [BP_onSBPmin, weight_min, UF_list, DP_list]
+        merge_dfs = [BP_onSBPmin, weight_min, UF_list, DP_list, time_max_freq, time_list]
         CAPD = merge_dfs[0]
         for merge_df in merge_dfs[1:]:
             CAPD = pd.merge(CAPD, merge_df, on='日期')
@@ -175,18 +128,19 @@ class CAPDExcel():
 
         sidx = 4
         CAPD_df = self.getDataframe()
+        tp_col = ['E', 'G', 'I', 'K', 'M']
         for idx, row in CAPD_df.iterrows():
             self.workSheet.merge_range(f'A{sidx}:A{sidx+1}', row['日期'], self.detail_date_format)
             self.workSheet.merge_range(f'B{sidx}:B{sidx+1}', f'=DAY(A{sidx})', self.detail_based_format)
             self.workSheet.merge_range(f'C{sidx}:C{sidx+1}', row['血壓 (mm/Hg)'], self.detail_based_format)
             self.workSheet.merge_range(f'D{sidx}:D{sidx+1}', row['體重 (kg)'], self.detail_based_format)
-            self.intervalSet(row['早上(濃度)'], 2000, row['早上(排出)'], sidx, 'E')
-            self.intervalSet(row['中午(濃度)'], 2000, row['中午(排出)'], sidx, 'G')
-            self.intervalSet(row['下午(濃度)'], 2000, row['下午(排出)'], sidx, 'I')
-            self.intervalSet(row['晚上(濃度)'], 2000, row['晚上(排出)'], sidx, 'K')
-            self.intervalSet(None, None, None, sidx, 'M')
+            for i in range(5):
+                tp = i + 1
+                self.intervalSet(row, tp, sidx, tp_col[i])
+            
 
-            self.workSheet.merge_range(f'O{sidx}:O{sidx+1}', f'=F{sidx+1}+H{sidx+1}+J{sidx+1}+L{sidx+1}-8000', self.detail_based_format)
+            self.workSheet.merge_range(f'O{sidx}:O{sidx+1}', f'=F{sidx+1}+H{sidx+1}+J{sidx+1}+L{sidx+1}+N{sidx+1}'+ \
+                                                             f'-F{sidx}-H{sidx}-J{sidx}-L{sidx}-N{sidx}', self.detail_based_format)
             self.workSheet.set_row(sidx, 12)
             self.workSheet.set_row(sidx+1, 12)
 
