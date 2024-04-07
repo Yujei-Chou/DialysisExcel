@@ -1,6 +1,8 @@
 # DialysisExcel
 Generate Peritoneal Dialysis Log
-![image](https://github.com/Yujei-Chou/DialysisExcel/assets/56510169/848f968c-72e3-492e-b140-1bc1ff4e1554)
+
+## Overview
+<img src="https://github.com/Yujei-Chou/DialysisExcel/assets/56510169/848f968c-72e3-492e-b140-1bc1ff4e1554" alt="drawing" width="600"/>
 
 ## Setting:
 Create Google Form with the following sections:
