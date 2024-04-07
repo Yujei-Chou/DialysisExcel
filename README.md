@@ -1,5 +1,7 @@
 # DialysisExcel
 Generate Peritoneal Dialysis Log
+![image](https://github.com/Yujei-Chou/DialysisExcel/assets/56510169/848f968c-72e3-492e-b140-1bc1ff4e1554)
+
 ## Setting:
 Create Google Form with the following sections:
    - 體重 (kg) / 簡答
